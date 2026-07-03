@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Rental Pricing Assistant</title>
+<!-- Tailwind CSS for styling -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- Lucide Icons for iconography -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-900 min-h-screen">
+
+  <!-- Header Section -->
+  <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm">
+          <i data-lucide="sparkles" class="w-5 h-5 text-white"></i>
+        </div>
+        <span class="text-lg font-semibold tracking-tight text-gray-900">AI Rental Pricing Assistant</span>
+      </div>
+      <div class="hidden sm:flex items-center gap-3">
+        <span class="text-sm text-gray-500">Bengaluru Portfolio</span>
+        <div class="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-sm font-medium text-gray-600">
+          AN
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    
+    <!-- Top Row: Selection & Core Insights -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      
+      <!-- Property Selection Card -->
+      <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-200/70 p-5 sm:p-6">
+        <h2 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <i data-lucide="home" class="w-5 h-5 text-blue-600"></i>
+          Property Selection
+        </h2>
+
+        <!-- Search input -->
+        <div class="relative mb-4">
+          <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+          <input
+            type="text"
+            placeholder="Search property by name or address"
+            class="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-gray-300 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+          />
+        </div>
+
+        <!-- Property Dropdown Select -->
+        <div class="mb-5">
+          <label class="block text-xs font-medium text-gray-500 mb-1.5">Select Property</label>
+          <div class="relative">
+            <select id="property-select" class="w-full appearance-none pl-3 pr-9 py-2.5 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+              <option value="">Loading properties…</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+          </div>
+        </div>
+
+        <!-- Dynamic Property Visual Details -->
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 mb-5">
+          <div class="flex items-start gap-2 mb-3">
+            <i data-lucide="map-pin" class="w-4 h-4 text-gray-500 mt-0.5 shrink-0"></i>
+            <p id="property-address" class="text-sm text-gray-700">Select a property to view details</p>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3 mb-4">
+            <div class="bg-white rounded-lg p-3 text-center ring-1 ring-gray-200">
+              <i data-lucide="bed-double" class="w-4 h-4 text-blue-600 mx-auto mb-1"></i>
+              <p id="property-bedrooms" class="text-sm font-semibold text-gray-900">—</p>
+              <p class="text-[11px] text-gray-500">Bedrooms</p>
+            </div>
+            <div class="bg-white rounded-lg p-3 text-center ring-1 ring-gray-200">
+              <i data-lucide="bath" class="w-4 h-4 text-blue-600 mx-auto mb-1"></i>
+              <p id="property-bathrooms" class="text-sm font-semibold text-gray-900">—</p>
+              <p class="text-[11px] text-gray-500">Bathrooms</p>
+            </div>
+            <div class="bg-white rounded-lg p-3 text-center ring-1 ring-gray-200">
+              <i data-lucide="ruler" class="w-4 h-4 text-blue-600 mx-auto mb-1"></i>
+              <p id="property-sqft" class="text-sm font-semibold text-gray-900">—</p>
+              <p class="text-[11px] text-gray-500">Sqft</p>
+            </div>
+          </div>
+
+          <div>
+            <p class="text-xs font-medium text-gray-500 mb-2">Amenities</p>
+            <div id="property-amenities" class="flex flex-wrap gap-1.5">
+              <span class="text-xs text-gray-400">Loading…</span>
+            </div>
+          </div>
+        </div>
+
+        <button id="generate-recommendation-btn" class="w-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium py-2.5 rounded-lg shadow-sm transition-colors">
+          <i data-lucide="wand2" class="w-4 h-4"></i>
+          Generate AI Recommendation
+        </button>
+      </div>
+
+      <!-- AI Recommendation Output Card -->
+      <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-200/70 p-5 sm:p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <i data-lucide="brain" class="w-5 h-5 text-blue-600"></i>
+            AI Recommendation
+          </h2>
+          <span id="recommendation-confidence" class="hidden"></span>
+        </div>
+
+        <div class="rounded-xl bg-gradient-to-br from-blue-50 to-white ring-1 ring-blue-100 p-6 text-center mb-5">
+          <p class="text-xs font-medium text-gray-500 mb-1">Recommended Monthly Rent</p>
+          <p id="recommendation-rent" class="text-4xl sm:text-5xl font-bold text-blue-700 tracking-tight">
+            <span class="text-gray-400">—</span>
+          </p>
+          <p id="recommendation-range" class="text-xs text-gray-500 mt-2"></p>
+        </div>
+
+        <div class="mb-4">
+          <p class="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Why this price</p>
+          <ul id="recommendation-notes" class="space-y-2">
+            <li class="text-sm text-gray-500">Click Generate AI Recommendation to see the analysis.</li>
+          </ul>
+        </div>
+
+        <p id="recommendation-updated" class="text-xs text-gray-400 flex items-center gap-1.5"></p>
+      </div>
+
+    </div>
+
+    <!-- Bottom Stacked Sections -->
+    <div class="space-y-6">
+      
+      <!-- Comparable Properties Grid -->
+      <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-200/70 p-5 sm:p-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-base font-semibold text-gray-900 flex items-center gap-2">
+            <i data-lucide="building-2" class="w-5 h-5 text-blue-600"></i>
+            Comparable Properties
+          </h2>
+          <button id="find-comparables-btn" class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium px-4 py-2 rounded-lg shadow-sm transition-colors">
+            <i data-lucide="search" class="w-4 h-4"></i>
+            Find Comparables
+          </button>
+        </div>
+
+        <div id="comparables-grid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">
+          
+          <!-- Comp 1 (Checked state) -->
+          <div class="rounded-xl p-4 ring-1 transition-colors ring-blue-300 bg-blue-50/40">
+            <div class="flex items-start justify-between mb-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              </label>
+              <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-inset ring-green-200">
+                94% match
+              </span>
+            </div>
+            <h3 class="text-sm font-semibold text-gray-900 mb-0.5">Elm Grove Apartments</h3>
+            <p class="text-lg font-bold text-gray-900 mb-1">₹35,200<span class="text-xs font-medium text-gray-400">/mo</span></p>
+            <p class="text-xs text-gray-500 flex items-center gap-1 mb-3">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+              HSR Layout, 0.4 mi away
+            </p>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200">School</span>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200">Metro</span>
+            </div>
+          </div>
+
+          <!-- Comp 2 (Unchecked state) -->
+          <div class="rounded-xl p-4 ring-1 transition-colors ring-gray-200 bg-white">
+            <div class="flex items-start justify-between mb-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              </label>
+              <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-inset ring-green-200">
+                89% match
+              </span>
+            </div>
+            <h3 class="text-sm font-semibold text-gray-900 mb-0.5">Birchwood Residency</h3>
+            <p class="text-lg font-bold text-gray-900 mb-1">₹37,500<span class="text-xs font-medium text-gray-400">/mo</span></p>
+            <p class="text-xs text-gray-500 flex items-center gap-1 mb-3">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+              HSR Layout, 0.7 mi away
+            </p>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200">Metro</span>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-inset ring-green-200">Park</span>
+            </div>
+          </div>
+
+          <!-- Comp 3 (Checked state) -->
+          <div class="rounded-xl p-4 ring-1 transition-colors ring-blue-300 bg-blue-50/40">
+            <div class="flex items-start justify-between mb-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              </label>
+              <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-inset ring-green-200">
+                91% match
+              </span>
+            </div>
+            <h3 class="text-sm font-semibold text-gray-900 mb-0.5">Pinehurst Towers</h3>
+            <p class="text-lg font-bold text-gray-900 mb-1">₹36,000<span class="text-xs font-medium text-gray-400">/mo</span></p>
+            <p class="text-xs text-gray-500 flex items-center gap-1 mb-3">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+              Sector 2, 0.9 mi away
+            </p>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200">School</span>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-inset ring-green-200">Park</span>
+            </div>
+          </div>
+
+          <!-- Comp 4 (Unchecked state) -->
+          <div class="rounded-xl p-4 ring-1 transition-colors ring-gray-200 bg-white">
+            <div class="flex items-start justify-between mb-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              </label>
+              <span class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-inset ring-green-200">
+                86% match
+              </span>
+            </div>
+            <h3 class="text-sm font-semibold text-gray-900 mb-0.5">Oakridge Enclave</h3>
+            <p class="text-lg font-bold text-gray-900 mb-1">₹38,200<span class="text-xs font-medium text-gray-400">/mo</span></p>
+            <p class="text-xs text-gray-500 flex items-center gap-1 mb-3">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+              HSR Layout, 1.1 mi away
+            </p>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200">School</span>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200">Metro</span>
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-green-50 text-green-700 ring-1 ring-inset ring-green-200">Park</span>
+            </div>
+          </div>
+
+        </div>
+
+        <button id="recalculate-btn" disabled class="inline-flex items-center gap-2 bg-white hover:bg-gray-50 active:bg-gray-100 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-lg ring-1 ring-gray-300 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          Recalculate Recommendation
+        </button>
+      </div>
+
+      <!-- Chat Interface -->
+      <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-200/70 p-5 sm:p-6">
+        <h2 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <i data-lucide="message-square" class="w-5 h-5 text-blue-600"></i>
+          Ask the AI Assistant
+        </h2>
+
+        <div class="rounded-lg bg-gray-50 ring-1 ring-gray-200 p-4 mb-4 max-h-80 overflow-y-auto">
+          
+          <!-- User message -->
+          <div class="flex justify-end mb-3">
+            <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-blue-600 text-white rounded-br-sm">
+              Why is the recommended rent higher than the current listing average?
+            </div>
+            <div class="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center ml-2 shrink-0 text-[11px] font-medium text-gray-600">
+              AN
+            </div>
+          </div>
+
+          <!-- Assistant response -->
+          <div class="flex justify-start mb-3">
+            <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center mr-2 shrink-0">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-gray-100 text-gray-800 rounded-bl-sm">
+              The recommendation factors in three comparable properties within 1 mile that recently leased 6–9% above the area average, driven by proximity to the new metro extension and a top-rated school zone. I also weighted amenity parity (gym, parking, security) against Maple Residency, Unit 4B.
+            </div>
+          </div>
+
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Ask about this pricing recommendation..."
+            class="flex-1 px-3 py-2.5 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+          />
+          <button class="inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm transition-colors shrink-0">
+            <i data-lucide="send" class="w-4 h-4"></i>
+            <span class="hidden sm:inline">Send</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Analyst Feedback Form -->
+      <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-200/70 p-5 sm:p-6">
+        <h2 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <i data-lucide="clipboard-check" class="w-5 h-5 text-blue-600"></i>
+          Analyst Feedback
+        </h2>
+
+        <textarea
+          rows="4"
+          placeholder="Share feedback on this AI recommendation — accuracy, comparables used, or adjustments needed..."
+          class="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition resize-none mb-4"
+        ></textarea>
+
+        <div class="flex items-center gap-3">
+          <button class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm transition-colors">
+            <i data-lucide="send" class="w-4 h-4"></i>
+            Submit Feedback
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <footer class="py-6 text-center text-xs text-gray-400">
+    AI Rental Pricing Assistant — UI preview with static sample data
+  </footer>
+
+  <!-- Script initialization for Lucide Web Icons -->
+  <script>
+    lucide.createIcons();
+  </script>
+  <!-- App scripts: API layer + DOM/UI wiring -->
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>
