@@ -57,9 +57,9 @@ The goal is to keep the analyst in the loop while cutting time-to-decision from 
 └────────────────────┘        └────────────────────┘        └────────────────────┘
 ```
 
-- **Frontend** — single-page UI (Tailwind HTML + a small vanilla-JS layer in `frontend/js/`). Wired to the backend for Milestones 1–3: property list + selected-property details, top-5 comparables on demand, and a rent recommendation card (rent, price range, confidence pill, "why this price" factor list, timestamp) driven by **Generate AI Recommendation**. The chat panel and feedback form still show placeholder content until the corresponding backend milestones land.
-- **Backend** — FastAPI service. Milestones 1–3 are live: loads the CSVs at startup, serves property list/detail endpoints, returns the top-5 comparable properties for any target via a deterministic weighted similarity score, and produces a rent recommendation with confidence and price range via a similarity-weighted comp model with area/amenity/location adjustments. Chat and feedback endpoints come in later milestones.
-- **AI layer** — comparable retrieval + a pricing model (both shipped as deterministic services in M2/M3), to be wrapped by dedicated agents and an LLM-driven explanation + chat interface (planned).
+- **Frontend** — single-page UI (Tailwind HTML + a small vanilla-JS layer in `frontend/js/`). Wired to the backend for Milestones 1–4: property list + selected-property details, top-5 comparables on demand, a rent recommendation card (rent, price range, confidence pill, "why this price" factor list, timestamp) driven by **Generate AI Recommendation**, and analyst-driven **Recalculate Recommendation** — toggle comp checkboxes to include/exclude and re-price with the same math. The chat panel and feedback form still show placeholder content until the corresponding backend milestones land.
+- **Backend** — FastAPI service. Milestones 1–4 are live: loads the CSVs at startup, serves property list/detail endpoints, returns the top-5 comparable properties for any target via a deterministic weighted similarity score, produces a rent recommendation with confidence and price range via a similarity-weighted comp model with area/amenity/location adjustments, and re-computes that recommendation over an analyst-supplied comp set. Chat and feedback endpoints come in later milestones.
+- **AI layer** — comparable retrieval + a pricing model (both shipped as deterministic services in M2/M3, exposed to analyst edits in M4), to be wrapped by dedicated agents and an LLM-driven explanation + chat interface (planned).
 
 ## Folder Structure
 
@@ -134,10 +134,11 @@ The page calls the backend at `http://localhost:8001`, so start the backend firs
 | `GET` | `/properties/{property_id}` | 1 | Single-property detail. Returns `404` if unknown. |
 | `GET` | `/properties/{property_id}/comparables` | 2 | Top 5 comparables ranked by a weighted similarity score (locality, bedrooms, area, type, bathrooms, amenities). Each result carries a `similarity_score` in `[0, 1]`. Returns `404` if the target is unknown. |
 | `POST` | `/recommend` | 3 | Rent recommendation for a target property. Body: `{"property_id": "P0001"}`. Returns `recommended_rent`, `confidence {score, level}`, `price_range {min, max}`, `pricing_factors {base_rent, area_adjustment, amenities_adjustment, location_adjustment, notes[]}`, and `comparables_used[]`. Deterministic — no LLM. Returns `400` if `property_id` is missing, `404` if the target is unknown. |
+| `POST` | `/recommend/recalculate` | 4 | Same recommendation shape as `/recommend`, but scored against an analyst-supplied comp set. Body: `{"property_id": "P0001", "selected_comparable_ids": ["P0091", "P0070", ...]}`. Dedupes the id list preserving order. Returns `400` if `property_id`/`selected_comparable_ids` is missing/empty or if the target id is listed as its own comparable; `404` if the target or any comp id is unknown. |
 
 ## Future Improvements
 
-- **Wire the remaining panels** — the property list, details, comparables grid, and recommendation card are already live-wired; the `Recalculate Recommendation` action (analyst toggles comps → new price), chat panel, and feedback form still need backend endpoints (conversation and learning agents) before they can leave placeholder content.
+- **Wire the remaining panels** — the property list, details, comparables grid, recommendation card, and `Recalculate Recommendation` are all live-wired; the chat panel and feedback form still need backend endpoints (conversation and learning agents) before they can leave placeholder content.
 - **Real pricing model** — train a rent model on historical leases; expose feature importances in the explanation panel.
 - **Grounded chat** — RAG over comps, lease history, and neighborhood data so the assistant cites its sources.
 - **Analyst-in-the-loop learning** — turn feedback and comp overrides into training signal for the pricing model.
