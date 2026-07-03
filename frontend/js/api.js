@@ -49,6 +49,13 @@ const api = {
       question,
       recommendation,
     }),
+  submitFeedback: (propertyId, recommendedRent, selectedComparables, feedback) =>
+    apiPost("/feedback", {
+      property_id: propertyId,
+      recommended_rent: recommendedRent,
+      selected_comparables: selectedComparables,
+      feedback,
+    }),
 };
 
 window.api = api;

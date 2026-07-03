@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import chat, pricing, properties
+from app.api import chat, feedback, pricing, properties
 from app.services.data_loader import DataLoader
 
 
@@ -48,3 +48,4 @@ def health() -> dict:
 app.include_router(properties.router)
 app.include_router(pricing.router)
 app.include_router(chat.router)
+app.include_router(feedback.router)

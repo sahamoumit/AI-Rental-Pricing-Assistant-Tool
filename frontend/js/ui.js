@@ -106,6 +106,7 @@ function renderComparables(comps) {
   });
 
   updateRecalculateButton();
+  updateFeedbackSubmitButton();
   refreshIcons();
 }
 
@@ -114,6 +115,7 @@ function renderComparablesPlaceholder(message) {
   if (!grid) return;
   grid.innerHTML = `<p class="text-sm text-gray-500 col-span-full">${message}</p>`;
   updateRecalculateButton();
+  updateFeedbackSubmitButton();
 }
 
 function getSelectedCompIds() {
@@ -156,6 +158,7 @@ function onCompCheckboxChange(event) {
     }
   }
   updateRecalculateButton();
+  updateFeedbackSubmitButton();
 }
 
 const CONFIDENCE_PILL_CLASSES = {
@@ -167,6 +170,7 @@ const CONFIDENCE_PILL_CLASSES = {
 function renderRecommendation(rec) {
   lastRecommendation = rec;
   updateChatSendButton();
+  updateFeedbackSubmitButton();
 
   const pill = document.getElementById("recommendation-confidence");
   if (pill) {
@@ -227,6 +231,7 @@ function renderRecommendation(rec) {
 function renderRecommendationPlaceholder(message) {
   lastRecommendation = null;
   updateChatSendButton();
+  updateFeedbackSubmitButton();
 
   const pill = document.getElementById("recommendation-confidence");
   if (pill) {
@@ -246,6 +251,7 @@ function renderRecommendationPlaceholder(message) {
 async function onPropertyChange(propertyId) {
   if (!propertyId) return;
   clearChatTranscript();
+  resetFeedbackForm();
   try {
     const p = await window.api.getProperty(propertyId);
     renderPropertyDetails(p);
@@ -435,6 +441,94 @@ function updateChatSendButton() {
   refreshIcons();
 }
 
+// ---------- Feedback panel ----------
+
+function getFeedbackText() {
+  const ta = document.getElementById("feedback-textarea");
+  return ta ? ta.value.trim() : "";
+}
+
+function updateFeedbackSubmitButton() {
+  const btn = document.getElementById("feedback-submit-btn");
+  if (!btn) return;
+  const hasRec = lastRecommendation != null;
+  const selectedCount = getSelectedCompIds().length;
+  const hasText = getFeedbackText().length > 0;
+
+  let label;
+  if (!hasRec) label = "Generate a recommendation first";
+  else if (selectedCount === 0) label = "Select at least one comparable";
+  else if (!hasText) label = "Write feedback first";
+  else label = "Submit Feedback";
+
+  btn.disabled = !(hasRec && selectedCount > 0 && hasText);
+  btn.innerHTML = `<i data-lucide="send" class="w-4 h-4"></i>${label}`;
+  refreshIcons();
+}
+
+function renderFeedbackStatus(kind, message) {
+  const el = document.getElementById("feedback-status");
+  if (!el) return;
+  if (!kind) {
+    el.innerHTML = "";
+    return;
+  }
+  const styles =
+    kind === "success"
+      ? "bg-green-50 text-green-800 ring-green-200"
+      : "bg-red-50 text-red-800 ring-red-200";
+  const icon = kind === "success" ? "check-circle-2" : "alert-triangle";
+  el.innerHTML = `
+    <div class="flex items-start gap-2 rounded-lg px-3 py-2 text-sm ring-1 ring-inset ${styles}">
+      <i data-lucide="${icon}" class="w-4 h-4 mt-0.5 shrink-0"></i>
+      <span>${escapeHtml(message)}</span>
+    </div>
+  `;
+  refreshIcons();
+}
+
+function resetFeedbackForm() {
+  const ta = document.getElementById("feedback-textarea");
+  if (ta) ta.value = "";
+  renderFeedbackStatus(null);
+  updateFeedbackSubmitButton();
+}
+
+async function onSubmitFeedback() {
+  const sel = document.getElementById("property-select");
+  const btn = document.getElementById("feedback-submit-btn");
+  if (!sel || !btn || !sel.value) return;
+  if (!lastRecommendation || lastRecommendation.recommended_rent == null) return;
+
+  const ids = getSelectedCompIds();
+  if (!ids.length) return;
+
+  const text = getFeedbackText();
+  if (!text) return;
+
+  renderFeedbackStatus(null);
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>Submitting…`;
+  refreshIcons();
+
+  try {
+    const res = await window.api.submitFeedback(
+      sel.value,
+      lastRecommendation.recommended_rent,
+      ids,
+      text
+    );
+    renderFeedbackStatus("success", res.message || "Feedback recorded.");
+    const ta = document.getElementById("feedback-textarea");
+    if (ta) ta.value = "";
+  } catch (err) {
+    console.error("Feedback failed:", err);
+    renderFeedbackStatus("error", err.message || "Failed to submit feedback.");
+  } finally {
+    updateFeedbackSubmitButton();
+  }
+}
+
 async function onSendChat() {
   const input = document.getElementById("chat-input");
   const btn = document.getElementById("chat-send-btn");
@@ -495,6 +589,11 @@ async function init() {
       });
     }
 
+    const feedbackBtn = document.getElementById("feedback-submit-btn");
+    if (feedbackBtn) feedbackBtn.addEventListener("click", onSubmitFeedback);
+    const feedbackTa = document.getElementById("feedback-textarea");
+    if (feedbackTa) feedbackTa.addEventListener("input", updateFeedbackSubmitButton);
+
     renderComparablesPlaceholder(
       "Select a property and click Find Comparables to see the top 5 similar properties."
     );
@@ -502,6 +601,7 @@ async function init() {
       "Select a property and click Generate AI Recommendation to see the analysis."
     );
     updateChatSendButton();
+    updateFeedbackSubmitButton();
 
     if (props.length) await onPropertyChange(props[0].property_id);
   } catch (err) {
