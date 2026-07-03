@@ -25,7 +25,7 @@ Agent layer
   ├── Comparable Agent         — retrieves and scores comparable listings
   ├── Pricing Agent            — produces the rent recommendation + confidence
   ├── Conversation Agent       — handles analyst Q&A over the recommendation
-  └── Learning Agent           — captures feedback and prepares training signal
+  └── Learning Agent           — reads captured feedback and surfaces structured insights (read-only). Never silently biases pricing; any influence on a recommendation must be explicit, opt-in, and visible in the response.
         │
         ▼
 Sample data (CSV files)
@@ -46,7 +46,9 @@ Data lives in CSVs for the prototype — no database. Agents are plain Python cl
 - ✅ **Milestone 5 (frontend wiring):** chat panel wired to `POST /chat`. `ui.js` keeps `lastRecommendation` in module scope — populated by `renderRecommendation` (both `/recommend` and `/recommend/recalculate`), cleared on placeholder/property change. The send button is disabled until a recommendation exists (label switches between `Generate a recommendation first` and `Send`); Enter also submits. Answers render as assistant bubbles with reference chips (`P0091 · Koregaon Park · ₹37,300`) below; failures render as red-tinted error bubbles carrying FastAPI's `detail` field, so a 503 shows "Ollama not reachable — is `ollama serve` running?" in-thread. Transcript clears on property change. No chat history / session memory / streaming. `apiPost` was updated to surface FastAPI's `detail` on non-2xx (benefits `/recommend*` too).
 - ✅ **Milestone 6 (analyst feedback service):** stateless `POST /feedback` appends one row per submission to `backend/data/analyst_feedback.csv`. `services/feedback.py` validates ids via `DataLoader`, dedupes the comp list preserving order, rejects the target as its own comparable, and writes an ISO 8601 UTC timestamp + JSON-encoded comp list via `csv.DictWriter`. Header written lazily (only when file missing or 0 bytes). Route enforces the wire contract (types/emptiness/positivity/`bool` explicitly rejected as rent) → 400; service raises `LookupError → 404` (unknown property or comp), `RuntimeError → 500` (CSV I/O). No file locking (prototype single-user). Synthetic seed data preserved as `analyst_feedback.seed.csv` for a future Learning Agent.
 - ✅ **Milestone 6 (frontend wiring):** feedback form wired to `POST /feedback`. Submit button disabled until (recommendation exists AND ≥1 comp checked AND non-empty textarea); its label steps through `Generate a recommendation first` → `Select at least one comparable` → `Write feedback first` → `Submit Feedback`. Comps sent = **currently checked** (not `lastRecommendation.comparables_used`), rent sent = `lastRecommendation.recommended_rent`. Success/error render as in-panel banners; textarea clears on success. Property change resets the form. Feedback text does NOT auto-clear on recalculate (the analyst may be typing about the current recommendation).
-- ⏳ **Not yet built:** Pydantic response models; Property Intelligence, Pricing, Conversation, Learning, Orchestrator agents (the Comparable *Agent* wrapper, Pricing *Agent* wrapper, Conversation *Agent* wrapper, and Learning *Agent* wrapper are all still TBD — M2–M6 shipped the underlying services only). No agents wire feedback into pricing or the LLM yet.
+- ✅ **Milestone 7 (Pricing Agent):** first agent-layer module — `agents/pricing_agent.py`. Stateless `PricingAgent.recommend(property_id, loader)` orchestrates the existing Comparable + Pricing services: loads the target, fetches the top-N comps via `similarity.top_comparables`, evaluates count + mean similarity, and if the mean falls below a configurable `low_confidence_threshold` (default `0.55`, mirrors `pricing._CONFIDENCE_MED`) retries once with a broader search (`n=10`) and hands those exact comp ids to the pricing service. Final rent math is *always* delegated to `services.pricing.calculate_recommended_rent` — the agent never duplicates the formula. Response is the pricing service's payload plus `agent_reasoning: list[str]` (execution trace). Exposed via `POST /agent/pricing` (thin route, same 400/404 mapping as `/recommend`). `/recommend` and `/recommend/recalculate` are unchanged.
+- ✅ **Milestone 7 (frontend wiring):** secondary **Run via Pricing Agent** button under the existing "Generate AI Recommendation" (outlined style so the direct path stays the primary CTA). Same recommendation card renders; a new indigo **Agent Reasoning** callout appears with the numbered `agent_reasoning` steps and auto-hides on non-agent responses (e.g. `/recommend`, `/recommend/recalculate`) or property change. `api.js` gains `runPricingAgent(propertyId)`; `ui.js` gains `onRunPricingAgent()` + `renderAgentReasoning()`.
+- ⏳ **Not yet built:** Pydantic response models; Property Intelligence, Comparable, Conversation, Learning, Orchestrator agents (Pricing Agent shipped in M7; Comparable, Conversation, and Learning agent wrappers over the underlying services still TBD). No agents wire feedback into pricing or the LLM yet.
 
 ## Folder Structure
 
@@ -72,7 +74,8 @@ Pricing Assistant/
 │       │   ├── properties.py        # Property list + detail + comparables routes
 │       │   ├── pricing.py           # POST /recommend (M3) — thin, delegates to services.pricing
 │       │   ├── chat.py              # POST /chat (M5) — thin, delegates to services.chat
-│       │   └── feedback.py          # POST /feedback (M6) — thin, delegates to services.feedback
+│       │   ├── feedback.py          # POST /feedback (M6) — thin, delegates to services.feedback
+│       │   └── agent.py             # POST /agent/pricing (M7) — thin, delegates to PricingAgent
 │       ├── services/
 │       │   ├── __init__.py
 │       │   ├── data_loader.py       # In-memory CSV access (single source of truth)
@@ -83,7 +86,9 @@ Pricing Assistant/
 │       ├── prompts/
 │       │   ├── __init__.py          # Package marker
 │       │   └── chat_prompt.txt      # System + user template ([SYSTEM]/[USER] split)
-│       ├── agents/                  # One module per agent (planned)
+│       ├── agents/
+│       │   ├── __init__.py
+│       │   └── pricing_agent.py     # PricingAgent (M7) — orchestrates similarity + pricing, adds reasoning trace
 │       └── models/                  # Pydantic schemas (added as endpoints need them)
 ├── docs/
 ├── README.md
@@ -105,6 +110,7 @@ Pricing Assistant/
 - Frontend and backend stay fully decoupled — the frontend only talks to the backend over JSON.
 - Business logic lives in `services/` or `agents/`, never in routes and never in the frontend.
 - Each agent has a single responsibility. If an agent grows two jobs, split it.
+- **Pricing stays transparent.** The base rent recommendation is deterministic and derivable end-to-end from `services/pricing.py`. Feedback, learning, or any other signal must NOT silently modify it. If a signal ever influences a recommendation, it must be (a) explicitly requested by the caller, (b) surfaced as its own line in `pricing_factors` with a clear note, and (c) skippable — the default path stays pure.
 
 **Code style**
 - Small functions, readable names, type hints on public functions.
