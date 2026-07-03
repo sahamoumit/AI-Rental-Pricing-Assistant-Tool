@@ -44,7 +44,9 @@ Data lives in CSVs for the prototype — no database. Agents are plain Python cl
 - ✅ **Milestone 4 (frontend wiring):** each comp card carries a `data-comp-card` wrapper and its checkbox a `data-comp-id`. Toggling flips the card ring/bg and re-computes the **Recalculate Recommendation** button's label (`Recalculate with N comparables` / `Select at least one comparable` / default). Click POSTs the checked ids to `/recommend/recalculate` and re-renders the AI Recommendation card via the same renderer as `/recommend`.
 - ✅ **Milestone 5 (AI conversation service):** stateless `POST /chat` backed by a local Llama model via Ollama's HTTP API — no OpenAI dependency. `services/chat.py` pulls the target from `DataLoader`, injects the caller-supplied recommendation into a prompt template on disk (`app/prompts/chat_prompt.txt`, split on `[SYSTEM]`/`[USER]` markers), POSTs to `{OLLAMA_BASE_URL}/api/chat` with `httpx` (no SDK), and returns `{answer, references}` where `references` is a compact projection of `comparables_used`. Chat never recomputes the recommendation — the frontend re-posts the object it received from `/recommend` (or `/recommend/recalculate`), so the analyst's chosen comp set is the source of truth. Errors: 400 (missing/bad body), 404 (unknown property), 503 (Ollama unreachable, model missing, or upstream failure — messages carry the exact remediation command). Env: `OLLAMA_MODEL` (default `llama3.2`), `OLLAMA_BASE_URL` (default `http://localhost:11434`). Verified live end-to-end.
 - ✅ **Milestone 5 (frontend wiring):** chat panel wired to `POST /chat`. `ui.js` keeps `lastRecommendation` in module scope — populated by `renderRecommendation` (both `/recommend` and `/recommend/recalculate`), cleared on placeholder/property change. The send button is disabled until a recommendation exists (label switches between `Generate a recommendation first` and `Send`); Enter also submits. Answers render as assistant bubbles with reference chips (`P0091 · Koregaon Park · ₹37,300`) below; failures render as red-tinted error bubbles carrying FastAPI's `detail` field, so a 503 shows "Ollama not reachable — is `ollama serve` running?" in-thread. Transcript clears on property change. No chat history / session memory / streaming. `apiPost` was updated to surface FastAPI's `detail` on non-2xx (benefits `/recommend*` too).
-- ⏳ **Not yet built:** Pydantic response models; Property Intelligence, Pricing, Conversation, Learning, Orchestrator agents (the Comparable *Agent* wrapper and Pricing *Agent* wrapper are also still TBD — M2–M5 shipped the underlying services only); analyst feedback endpoint + its frontend wiring.
+- ✅ **Milestone 6 (analyst feedback service):** stateless `POST /feedback` appends one row per submission to `backend/data/analyst_feedback.csv`. `services/feedback.py` validates ids via `DataLoader`, dedupes the comp list preserving order, rejects the target as its own comparable, and writes an ISO 8601 UTC timestamp + JSON-encoded comp list via `csv.DictWriter`. Header written lazily (only when file missing or 0 bytes). Route enforces the wire contract (types/emptiness/positivity/`bool` explicitly rejected as rent) → 400; service raises `LookupError → 404` (unknown property or comp), `RuntimeError → 500` (CSV I/O). No file locking (prototype single-user). Synthetic seed data preserved as `analyst_feedback.seed.csv` for a future Learning Agent.
+- ✅ **Milestone 6 (frontend wiring):** feedback form wired to `POST /feedback`. Submit button disabled until (recommendation exists AND ≥1 comp checked AND non-empty textarea); its label steps through `Generate a recommendation first` → `Select at least one comparable` → `Write feedback first` → `Submit Feedback`. Comps sent = **currently checked** (not `lastRecommendation.comparables_used`), rent sent = `lastRecommendation.recommended_rent`. Success/error render as in-panel banners; textarea clears on success. Property change resets the form. Feedback text does NOT auto-clear on recalculate (the analyst may be typing about the current recommendation).
+- ⏳ **Not yet built:** Pydantic response models; Property Intelligence, Pricing, Conversation, Learning, Orchestrator agents (the Comparable *Agent* wrapper, Pricing *Agent* wrapper, Conversation *Agent* wrapper, and Learning *Agent* wrapper are all still TBD — M2–M6 shipped the underlying services only). No agents wire feedback into pricing or the LLM yet.
 
 ## Folder Structure
 
@@ -58,20 +60,26 @@ Pricing Assistant/
 ├── backend/
 │   ├── requirements.txt
 │   ├── generate_data.py             # Synthetic CSV generator (Pune data)
-│   ├── data/                        # CSV sample data (properties, rental_history, analyst_feedback)
+│   ├── data/
+│   │   ├── properties.csv
+│   │   ├── rental_history.csv
+│   │   ├── analyst_feedback.csv     # Append-only sink for M6 submissions (header at boot)
+│   │   └── analyst_feedback.seed.csv # 50 synthetic rows preserved for future Learning Agent
 │   └── app/                         # FastAPI app (built incrementally)
 │       ├── main.py                  # FastAPI entrypoint (lifespan loads CSVs into app.state)
 │       ├── api/
 │       │   ├── __init__.py
 │       │   ├── properties.py        # Property list + detail + comparables routes
 │       │   ├── pricing.py           # POST /recommend (M3) — thin, delegates to services.pricing
-│       │   └── chat.py              # POST /chat (M5) — thin, delegates to services.chat
+│       │   ├── chat.py              # POST /chat (M5) — thin, delegates to services.chat
+│       │   └── feedback.py          # POST /feedback (M6) — thin, delegates to services.feedback
 │       ├── services/
 │       │   ├── __init__.py
 │       │   ├── data_loader.py       # In-memory CSV access (single source of truth)
 │       │   ├── similarity.py        # Weighted similarity + top-N comparables (M2)
 │       │   ├── pricing.py           # Rent recommendation (M3) — single entry point calculate_recommended_rent()
-│       │   └── chat.py              # Ollama-backed conversation (M5) — answer_question()
+│       │   ├── chat.py              # Ollama-backed conversation (M5) — answer_question()
+│       │   └── feedback.py          # Append-only CSV writer (M6) — record_feedback()
 │       ├── prompts/
 │       │   ├── __init__.py          # Package marker
 │       │   └── chat_prompt.txt      # System + user template ([SYSTEM]/[USER] split)
