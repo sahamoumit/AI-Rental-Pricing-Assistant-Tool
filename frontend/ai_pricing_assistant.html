@@ -260,37 +260,20 @@
           Ask the AI Assistant
         </h2>
 
-        <div class="rounded-lg bg-gray-50 ring-1 ring-gray-200 p-4 mb-4 max-h-80 overflow-y-auto">
-          
-          <!-- User message -->
-          <div class="flex justify-end mb-3">
-            <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-blue-600 text-white rounded-br-sm">
-              Why is the recommended rent higher than the current listing average?
-            </div>
-            <div class="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center ml-2 shrink-0 text-[11px] font-medium text-gray-600">
-              AN
-            </div>
-          </div>
-
-          <!-- Assistant response -->
-          <div class="flex justify-start mb-3">
-            <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center mr-2 shrink-0">
-              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-white"></i>
-            </div>
-            <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-gray-100 text-gray-800 rounded-bl-sm">
-              The recommendation factors in three comparable properties within 1 mile that recently leased 6–9% above the area average, driven by proximity to the new metro extension and a top-rated school zone. I also weighted amenity parity (gym, parking, security) against Maple Residency, Unit 4B.
-            </div>
-          </div>
-
+        <div id="chat-transcript" class="rounded-lg bg-gray-50 ring-1 ring-gray-200 p-4 mb-4 max-h-80 overflow-y-auto">
+          <p id="chat-empty-hint" class="text-sm text-gray-500 text-center py-6">
+            Generate a recommendation first, then ask a follow-up question below.
+          </p>
         </div>
 
         <div class="flex items-center gap-2">
           <input
+            id="chat-input"
             type="text"
             placeholder="Ask about this pricing recommendation..."
             class="flex-1 px-3 py-2.5 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
           />
-          <button class="inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm transition-colors shrink-0">
+          <button id="chat-send-btn" disabled class="inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 rounded-lg shadow-sm transition-colors shrink-0">
             <i data-lucide="send" class="w-4 h-4"></i>
             <span class="hidden sm:inline">Send</span>
           </button>

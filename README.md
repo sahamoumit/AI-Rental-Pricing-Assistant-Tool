@@ -57,9 +57,9 @@ The goal is to keep the analyst in the loop while cutting time-to-decision from 
 └────────────────────┘        └────────────────────┘        └────────────────────┘
 ```
 
-- **Frontend** — single-page UI (Tailwind HTML + a small vanilla-JS layer in `frontend/js/`). Wired to the backend for Milestones 1–4: property list + selected-property details, top-5 comparables on demand, a rent recommendation card (rent, price range, confidence pill, "why this price" factor list, timestamp) driven by **Generate AI Recommendation**, and analyst-driven **Recalculate Recommendation** — toggle comp checkboxes to include/exclude and re-price with the same math. The chat panel and feedback form still show placeholder content until the corresponding backend milestones land.
-- **Backend** — FastAPI service. Milestones 1–4 are live: loads the CSVs at startup, serves property list/detail endpoints, returns the top-5 comparable properties for any target via a deterministic weighted similarity score, produces a rent recommendation with confidence and price range via a similarity-weighted comp model with area/amenity/location adjustments, and re-computes that recommendation over an analyst-supplied comp set. Chat and feedback endpoints come in later milestones.
-- **AI layer** — comparable retrieval + a pricing model (both shipped as deterministic services in M2/M3, exposed to analyst edits in M4), to be wrapped by dedicated agents and an LLM-driven explanation + chat interface (planned).
+- **Frontend** — single-page UI (Tailwind HTML + a small vanilla-JS layer in `frontend/js/`). Wired to the backend for Milestones 1–5: property list + selected-property details, top-5 comparables on demand, a rent recommendation card (rent, price range, confidence pill, "why this price" factor list, timestamp) driven by **Generate AI Recommendation**, analyst-driven **Recalculate Recommendation** (toggle comp checkboxes to include/exclude and re-price with the same math), and a live chat panel that asks follow-up questions about the current recommendation. The feedback form still shows placeholder content until the corresponding backend milestone lands.
+- **Backend** — FastAPI service. Milestones 1–5 are live: loads the CSVs at startup, serves property list/detail endpoints, returns the top-5 comparable properties for any target via a deterministic weighted similarity score, produces a rent recommendation with confidence and price range via a similarity-weighted comp model with area/amenity/location adjustments, re-computes that recommendation over an analyst-supplied comp set, and answers analyst questions with a local Llama model that grounds every response in the target property, the current recommendation, and the comparables the analyst chose. The feedback endpoint comes in a later milestone.
+- **AI layer** — comparable retrieval + a pricing model (both shipped as deterministic services in M2/M3, exposed to analyst edits in M4). A local Llama model (via Ollama's HTTP API) powers the conversational Q&A in M5. Dedicated agents (Property Intelligence, Pricing, Conversation, Learning, Orchestrator) still planned as wrappers over these services.
 
 ## Folder Structure
 
@@ -78,11 +78,15 @@ Pricing Assistant/
 │       ├── main.py                  # Entrypoint (startup hook loads CSVs, mounts routers)
 │       ├── api/
 │       │   ├── properties.py        # GET /properties, /properties/{id}, /properties/{id}/comparables
-│       │   └── pricing.py           # POST /recommend
-│       └── services/
-│           ├── data_loader.py       # In-memory CSV access (single source of truth)
-│           ├── similarity.py        # Weighted similarity scoring + top-N comparables
-│           └── pricing.py           # Rent recommendation (weighted comp mean + adjustments + confidence)
+│       │   ├── pricing.py           # POST /recommend, POST /recommend/recalculate
+│       │   └── chat.py              # POST /chat
+│       ├── services/
+│       │   ├── data_loader.py       # In-memory CSV access (single source of truth)
+│       │   ├── similarity.py        # Weighted similarity scoring + top-N comparables
+│       │   ├── pricing.py           # Rent recommendation (weighted comp mean + adjustments + confidence)
+│       │   └── chat.py              # Ollama-backed conversation (grounded in the current recommendation)
+│       └── prompts/
+│           └── chat_prompt.txt      # System + user template for /chat
 ├── docs/                            # Design notes, diagrams, decision log
 ├── CLAUDE.md
 └── README.md
@@ -92,7 +96,8 @@ Pricing Assistant/
 
 - **Frontend**: Tailwind CSS + Lucide icons — delivered as a single HTML file for zero-build previewing.
 - **Backend**: Python 3.11+, FastAPI, Uvicorn, Pydantic, pandas.
-- **AI / ML (planned)**: comparable-property retrieval + a regression/gradient-boosted pricing model; LLM for explanation and Q&A.
+- **LLM**: local Llama via [Ollama](https://ollama.com)'s HTTP API (default model `llama3.2`, called with `httpx` — no SDK). Powers the conversational Q&A grounded in the current recommendation. Model + endpoint configurable via `.env`.
+- **AI / ML (planned)**: replace the deterministic pricing formula with a trained rent model (regression / gradient boosting); agent wrappers around the existing services.
 - **Data**: CSV files under `backend/data/` for the prototype (PostgreSQL / vector store are future work).
 
 ## Setup
@@ -125,6 +130,25 @@ python3 -m http.server 8000
 
 The page calls the backend at `http://localhost:8001`, so start the backend first — otherwise the dropdown will stay on its "Loading properties…" placeholder.
 
+### Ollama (needed for chat)
+
+`POST /chat` calls a local Llama model via Ollama. Skip this if you only need M1–M4 endpoints; the rest of the app works without it.
+
+```bash
+brew install ollama          # or see https://ollama.com
+ollama serve &               # daemon on http://localhost:11434
+ollama pull llama3.2         # ~2 GB
+```
+
+Defaults are wired for a local install. To override, add a `backend/.env`:
+
+```
+OLLAMA_MODEL=llama3.2
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+No API keys are needed — Ollama runs locally, unauthenticated. `.env` is gitignored.
+
 ### Implemented endpoints
 
 | Method | Path | Milestone | Description |
@@ -135,10 +159,11 @@ The page calls the backend at `http://localhost:8001`, so start the backend firs
 | `GET` | `/properties/{property_id}/comparables` | 2 | Top 5 comparables ranked by a weighted similarity score (locality, bedrooms, area, type, bathrooms, amenities). Each result carries a `similarity_score` in `[0, 1]`. Returns `404` if the target is unknown. |
 | `POST` | `/recommend` | 3 | Rent recommendation for a target property. Body: `{"property_id": "P0001"}`. Returns `recommended_rent`, `confidence {score, level}`, `price_range {min, max}`, `pricing_factors {base_rent, area_adjustment, amenities_adjustment, location_adjustment, notes[]}`, and `comparables_used[]`. Deterministic — no LLM. Returns `400` if `property_id` is missing, `404` if the target is unknown. |
 | `POST` | `/recommend/recalculate` | 4 | Same recommendation shape as `/recommend`, but scored against an analyst-supplied comp set. Body: `{"property_id": "P0001", "selected_comparable_ids": ["P0091", "P0070", ...]}`. Dedupes the id list preserving order. Returns `400` if `property_id`/`selected_comparable_ids` is missing/empty or if the target id is listed as its own comparable; `404` if the target or any comp id is unknown. |
+| `POST` | `/chat` | 5 | Answers an analyst question about a specific recommendation using a local Llama model (via Ollama). Body: `{"property_id": "P0001", "question": "why this price?", "recommendation": { ...full response from /recommend or /recommend/recalculate... }}`. Stateless — chat never recomputes the recommendation; the frontend re-posts what it already has. Returns `{answer, references[]}` where `references` is a compact `[{property_id, address, locality, current_rent}, ...]` projection of `comparables_used`. Returns `400` on missing/malformed body fields, `404` if the target property is unknown, `503` if Ollama is unreachable, the model isn't pulled, or the upstream call fails (message carries the exact remediation command). |
 
 ## Future Improvements
 
-- **Wire the remaining panels** — the property list, details, comparables grid, recommendation card, and `Recalculate Recommendation` are all live-wired; the chat panel and feedback form still need backend endpoints (conversation and learning agents) before they can leave placeholder content.
+- **Wire the remaining panel** — the property list, details, comparables grid, recommendation card, `Recalculate Recommendation`, and chat panel are all live-wired; the analyst feedback form still needs a backend endpoint (learning agent) before it can leave placeholder content.
 - **Real pricing model** — train a rent model on historical leases; expose feature importances in the explanation panel.
 - **Grounded chat** — RAG over comps, lease history, and neighborhood data so the assistant cites its sources.
 - **Analyst-in-the-loop learning** — turn feedback and comp overrides into training signal for the pricing model.

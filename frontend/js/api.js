@@ -18,7 +18,16 @@ async function apiPost(path, body) {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new Error(`POST ${path} failed: ${res.status} ${res.statusText}`);
+    // Surface FastAPI's `detail` when available — /chat 503s carry the
+    // remediation command (e.g. "run `ollama serve`") the analyst needs.
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      if (body && body.detail) detail = body.detail;
+    } catch (_) {
+      /* body was not JSON — fall back to statusText */
+    }
+    throw new Error(`POST ${path} failed: ${res.status} — ${detail}`);
   }
   return res.json();
 }
@@ -33,6 +42,12 @@ const api = {
     apiPost("/recommend/recalculate", {
       property_id: propertyId,
       selected_comparable_ids: ids,
+    }),
+  chat: (propertyId, question, recommendation) =>
+    apiPost("/chat", {
+      property_id: propertyId,
+      question,
+      recommendation,
     }),
 };
 

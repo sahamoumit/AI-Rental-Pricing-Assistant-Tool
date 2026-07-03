@@ -10,8 +10,8 @@ pydantic-settings==2.6.1
 pandas==2.2.3
 numpy==2.1.3
 
-# AI / LLM
-openai==1.57.0
+# AI / LLM — local Llama via Ollama's HTTP API (see services/chat.py).
+# No SDK; we call it with httpx.
 
 # Config & utilities
 python-dotenv==1.0.1

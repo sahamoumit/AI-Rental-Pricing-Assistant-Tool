@@ -8,6 +8,11 @@ const AMENITY_FLAGS = {
   lift: "Lift",
 };
 
+// Cached response from the last successful /recommend or /recommend/recalculate.
+// Chat POSTs this back so the backend doesn't recompute pricing per question;
+// the analyst's chosen comp set flows through unchanged.
+let lastRecommendation = null;
+
 const inr = (n) =>
   new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(Number(n) || 0);
 
@@ -160,6 +165,9 @@ const CONFIDENCE_PILL_CLASSES = {
 };
 
 function renderRecommendation(rec) {
+  lastRecommendation = rec;
+  updateChatSendButton();
+
   const pill = document.getElementById("recommendation-confidence");
   if (pill) {
     const pct = Math.round((rec.confidence?.score ?? 0) * 100);
@@ -217,6 +225,9 @@ function renderRecommendation(rec) {
 }
 
 function renderRecommendationPlaceholder(message) {
+  lastRecommendation = null;
+  updateChatSendButton();
+
   const pill = document.getElementById("recommendation-confidence");
   if (pill) {
     pill.className = "hidden";
@@ -234,6 +245,7 @@ function renderRecommendationPlaceholder(message) {
 
 async function onPropertyChange(propertyId) {
   if (!propertyId) return;
+  clearChatTranscript();
   try {
     const p = await window.api.getProperty(propertyId);
     renderPropertyDetails(p);
@@ -324,6 +336,136 @@ async function onFindComparables() {
   }
 }
 
+// ---------- Chat panel ----------
+
+function escapeHtml(str) {
+  const d = document.createElement("div");
+  d.textContent = String(str ?? "");
+  return d.innerHTML;
+}
+
+function scrollTranscriptToBottom() {
+  const t = document.getElementById("chat-transcript");
+  if (t) t.scrollTop = t.scrollHeight;
+}
+
+function removeChatEmptyHint() {
+  const hint = document.getElementById("chat-empty-hint");
+  if (hint) hint.remove();
+}
+
+function clearChatTranscript() {
+  const t = document.getElementById("chat-transcript");
+  if (!t) return;
+  t.innerHTML = `
+    <p id="chat-empty-hint" class="text-sm text-gray-500 text-center py-6">
+      Generate a recommendation first, then ask a follow-up question below.
+    </p>
+  `;
+}
+
+function appendUserBubble(text) {
+  const t = document.getElementById("chat-transcript");
+  if (!t) return;
+  removeChatEmptyHint();
+  const wrap = document.createElement("div");
+  wrap.className = "flex justify-end mb-3";
+  wrap.innerHTML = `
+    <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-blue-600 text-white rounded-br-sm whitespace-pre-wrap">${escapeHtml(text)}</div>
+    <div class="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center ml-2 shrink-0 text-[11px] font-medium text-gray-600">AN</div>
+  `;
+  t.appendChild(wrap);
+  scrollTranscriptToBottom();
+}
+
+function appendAssistantBubble(text, references) {
+  const t = document.getElementById("chat-transcript");
+  if (!t) return;
+  removeChatEmptyHint();
+  const chips = (references ?? [])
+    .map(
+      (r) => `
+        <span class="text-[11px] px-2 py-0.5 rounded-full bg-white ring-1 ring-inset ring-gray-200 text-gray-600">
+          ${escapeHtml(r.property_id)} · ${escapeHtml(r.locality ?? "")} · ₹${inr(r.current_rent)}
+        </span>`
+    )
+    .join("");
+  const wrap = document.createElement("div");
+  wrap.className = "flex justify-start mb-3";
+  wrap.innerHTML = `
+    <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center mr-2 shrink-0">
+      <i data-lucide="sparkles" class="w-3.5 h-3.5 text-white"></i>
+    </div>
+    <div class="max-w-[80%]">
+      <div class="rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-gray-100 text-gray-800 rounded-bl-sm whitespace-pre-wrap">${escapeHtml(text)}</div>
+      ${chips ? `<div class="mt-2 flex flex-wrap gap-1.5">${chips}</div>` : ""}
+    </div>
+  `;
+  t.appendChild(wrap);
+  scrollTranscriptToBottom();
+  refreshIcons();
+}
+
+function appendErrorBubble(text) {
+  const t = document.getElementById("chat-transcript");
+  if (!t) return;
+  removeChatEmptyHint();
+  const wrap = document.createElement("div");
+  wrap.className = "flex justify-start mb-3";
+  wrap.innerHTML = `
+    <div class="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center mr-2 shrink-0">
+      <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-red-600"></i>
+    </div>
+    <div class="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-red-50 text-red-800 ring-1 ring-inset ring-red-200 rounded-bl-sm">
+      ${escapeHtml(text)}
+    </div>
+  `;
+  t.appendChild(wrap);
+  scrollTranscriptToBottom();
+  refreshIcons();
+}
+
+function updateChatSendButton() {
+  const btn = document.getElementById("chat-send-btn");
+  if (!btn) return;
+  const hasContext = lastRecommendation != null;
+  btn.disabled = !hasContext;
+  const label = hasContext ? "Send" : "Generate a recommendation first";
+  btn.innerHTML = `<i data-lucide="send" class="w-4 h-4"></i><span class="hidden sm:inline">${label}</span>`;
+  refreshIcons();
+}
+
+async function onSendChat() {
+  const input = document.getElementById("chat-input");
+  const btn = document.getElementById("chat-send-btn");
+  const sel = document.getElementById("property-select");
+  if (!input || !btn || !sel || !sel.value) return;
+
+  const question = input.value.trim();
+  if (!question) return;
+  if (!lastRecommendation) {
+    appendErrorBubble("Generate a recommendation first — chat needs the pricing context.");
+    return;
+  }
+
+  appendUserBubble(question);
+  input.value = "";
+
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span class="hidden sm:inline">Thinking…</span>`;
+  refreshIcons();
+
+  try {
+    const res = await window.api.chat(sel.value, question, lastRecommendation);
+    appendAssistantBubble(res.answer || "(empty response)", res.references || []);
+  } catch (err) {
+    console.error("Chat failed:", err);
+    appendErrorBubble(err.message || "Chat request failed.");
+  } finally {
+    updateChatSendButton();
+  }
+}
+
 async function init() {
   try {
     const props = await window.api.listProperties();
@@ -341,12 +483,25 @@ async function init() {
     const recalcBtn = document.getElementById("recalculate-btn");
     if (recalcBtn) recalcBtn.addEventListener("click", onRecalculate);
 
+    const sendBtn = document.getElementById("chat-send-btn");
+    if (sendBtn) sendBtn.addEventListener("click", onSendChat);
+    const chatInput = document.getElementById("chat-input");
+    if (chatInput) {
+      chatInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onSendChat();
+        }
+      });
+    }
+
     renderComparablesPlaceholder(
       "Select a property and click Find Comparables to see the top 5 similar properties."
     );
     renderRecommendationPlaceholder(
       "Select a property and click Generate AI Recommendation to see the analysis."
     );
+    updateChatSendButton();
 
     if (props.length) await onPropertyChange(props[0].property_id);
   } catch (err) {

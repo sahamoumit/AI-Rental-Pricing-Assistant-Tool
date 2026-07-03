@@ -42,7 +42,9 @@ Data lives in CSVs for the prototype — no database. Agents are plain Python cl
 - ✅ **Milestone 3 (frontend wiring):** the "AI Recommendation" card is now live — a **Generate AI Recommendation** button POSTs to `/recommend` and renders the rent number, price range, colour-bucketed confidence pill (green/amber/red for high/medium/low), the factor `notes` as "Why this price" bullets, and a fresh timestamp. Card resets on property change.
 - ✅ **Milestone 4 (analyst recalculation):** `calculate_recommended_rent` gained an optional `comparable_ids` parameter so the same math applies to an analyst-chosen comp set. Exposed via `POST /recommend/recalculate` with body `{"property_id": "...", "selected_comparable_ids": [...]}`. Same response shape as `/recommend`. Validates existence of every id; distinguishes `LookupError → 404` (unknown property or comp) from `ValueError → 400` (empty list, target as own comp). Both pricing routes updated to that error mapping.
 - ✅ **Milestone 4 (frontend wiring):** each comp card carries a `data-comp-card` wrapper and its checkbox a `data-comp-id`. Toggling flips the card ring/bg and re-computes the **Recalculate Recommendation** button's label (`Recalculate with N comparables` / `Select at least one comparable` / default). Click POSTs the checked ids to `/recommend/recalculate` and re-renders the AI Recommendation card via the same renderer as `/recommend`.
-- ⏳ **Not yet built:** Pydantic response models; Property Intelligence, Pricing, Conversation, Learning, Orchestrator agents (the Comparable *Agent* wrapper and Pricing *Agent* wrapper are also still TBD — M2–M4 shipped the underlying services only); chat and feedback endpoints + their frontend wiring.
+- ✅ **Milestone 5 (AI conversation service):** stateless `POST /chat` backed by a local Llama model via Ollama's HTTP API — no OpenAI dependency. `services/chat.py` pulls the target from `DataLoader`, injects the caller-supplied recommendation into a prompt template on disk (`app/prompts/chat_prompt.txt`, split on `[SYSTEM]`/`[USER]` markers), POSTs to `{OLLAMA_BASE_URL}/api/chat` with `httpx` (no SDK), and returns `{answer, references}` where `references` is a compact projection of `comparables_used`. Chat never recomputes the recommendation — the frontend re-posts the object it received from `/recommend` (or `/recommend/recalculate`), so the analyst's chosen comp set is the source of truth. Errors: 400 (missing/bad body), 404 (unknown property), 503 (Ollama unreachable, model missing, or upstream failure — messages carry the exact remediation command). Env: `OLLAMA_MODEL` (default `llama3.2`), `OLLAMA_BASE_URL` (default `http://localhost:11434`). Verified live end-to-end.
+- ✅ **Milestone 5 (frontend wiring):** chat panel wired to `POST /chat`. `ui.js` keeps `lastRecommendation` in module scope — populated by `renderRecommendation` (both `/recommend` and `/recommend/recalculate`), cleared on placeholder/property change. The send button is disabled until a recommendation exists (label switches between `Generate a recommendation first` and `Send`); Enter also submits. Answers render as assistant bubbles with reference chips (`P0091 · Koregaon Park · ₹37,300`) below; failures render as red-tinted error bubbles carrying FastAPI's `detail` field, so a 503 shows "Ollama not reachable — is `ollama serve` running?" in-thread. Transcript clears on property change. No chat history / session memory / streaming. `apiPost` was updated to surface FastAPI's `detail` on non-2xx (benefits `/recommend*` too).
+- ⏳ **Not yet built:** Pydantic response models; Property Intelligence, Pricing, Conversation, Learning, Orchestrator agents (the Comparable *Agent* wrapper and Pricing *Agent* wrapper are also still TBD — M2–M5 shipped the underlying services only); analyst feedback endpoint + its frontend wiring.
 
 ## Folder Structure
 
@@ -62,12 +64,17 @@ Pricing Assistant/
 │       ├── api/
 │       │   ├── __init__.py
 │       │   ├── properties.py        # Property list + detail + comparables routes
-│       │   └── pricing.py           # POST /recommend (M3) — thin, delegates to services.pricing
+│       │   ├── pricing.py           # POST /recommend (M3) — thin, delegates to services.pricing
+│       │   └── chat.py              # POST /chat (M5) — thin, delegates to services.chat
 │       ├── services/
 │       │   ├── __init__.py
 │       │   ├── data_loader.py       # In-memory CSV access (single source of truth)
 │       │   ├── similarity.py        # Weighted similarity + top-N comparables (M2)
-│       │   └── pricing.py           # Rent recommendation (M3) — single entry point calculate_recommended_rent()
+│       │   ├── pricing.py           # Rent recommendation (M3) — single entry point calculate_recommended_rent()
+│       │   └── chat.py              # Ollama-backed conversation (M5) — answer_question()
+│       ├── prompts/
+│       │   ├── __init__.py          # Package marker
+│       │   └── chat_prompt.txt      # System + user template ([SYSTEM]/[USER] split)
 │       ├── agents/                  # One module per agent (planned)
 │       └── models/                  # Pydantic schemas (added as endpoints need them)
 ├── docs/
@@ -80,7 +87,7 @@ Pricing Assistant/
 - **Frontend**: single static HTML file — Tailwind CSS + Lucide icons over CDN, no framework, no build step.
 - **Backend**: Python 3.11+, FastAPI, Uvicorn, Pydantic.
 - **Data**: pandas, numpy over CSV files.
-- **AI**: OpenAI SDK for the LLM-driven agents.
+- **AI**: local Llama via [Ollama](https://ollama.com)'s HTTP API. Called with `httpx` — no SDK. Model + endpoint configurable via `.env`.
 - **Config**: python-dotenv (`.env`, never committed).
 
 ## Coding Guidelines
@@ -131,7 +138,22 @@ python3 -m http.server 8000
 # open http://localhost:8000/ai_pricing_assistant.html
 ```
 
-Milestone 1 endpoints don't need any secrets. Once agent milestones land, put an `.env` at `backend/.env` with at least `OPENAI_API_KEY`. Never commit it.
+### Ollama (required from M5 onward)
+
+`POST /chat` calls a local Llama model via Ollama. Install once, run the daemon, pull the model:
+
+```bash
+brew install ollama          # or see https://ollama.com
+ollama serve &               # starts the daemon at http://localhost:11434
+ollama pull llama3.2         # ~2 GB
+```
+
+Everything else runs without secrets. `.env` at `backend/.env` is optional — only needed to override defaults:
+
+- `OLLAMA_MODEL` (default `llama3.2`)
+- `OLLAMA_BASE_URL` (default `http://localhost:11434`)
+
+No API keys anywhere. Never commit `.env`.
 
 ## What "Done" Looks Like For This Prototype
 
