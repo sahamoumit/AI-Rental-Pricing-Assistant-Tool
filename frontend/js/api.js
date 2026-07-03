@@ -38,6 +38,7 @@ const api = {
   getComparables: (propertyId) =>
     apiGet(`/properties/${encodeURIComponent(propertyId)}/comparables`),
   getRecommendation: (propertyId) => apiPost("/recommend", { property_id: propertyId }),
+  runPricingAgent: (propertyId) => apiPost("/agent/pricing", { property_id: propertyId }),
   recalculateRecommendation: (propertyId, ids) =>
     apiPost("/recommend/recalculate", {
       property_id: propertyId,

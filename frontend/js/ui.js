@@ -216,6 +216,8 @@ function renderRecommendation(rec) {
       : `<li class="text-sm text-gray-500">No pricing factors reported.</li>`;
   }
 
+  renderAgentReasoning(rec.agent_reasoning);
+
   const updated = document.getElementById("recommendation-updated");
   if (updated) {
     const now = new Date();
@@ -226,6 +228,21 @@ function renderRecommendation(rec) {
   }
 
   refreshIcons();
+}
+
+function renderAgentReasoning(steps) {
+  const section = document.getElementById("agent-reasoning-section");
+  const list = document.getElementById("agent-reasoning");
+  if (!section || !list) return;
+  if (!Array.isArray(steps) || !steps.length) {
+    section.classList.add("hidden");
+    list.innerHTML = "";
+    return;
+  }
+  list.innerHTML = steps
+    .map((s) => `<li>${escapeHtml(s)}</li>`)
+    .join("");
+  section.classList.remove("hidden");
 }
 
 function renderRecommendationPlaceholder(message) {
@@ -244,6 +261,7 @@ function renderRecommendationPlaceholder(message) {
   if (range) range.textContent = "";
   const notesEl = document.getElementById("recommendation-notes");
   if (notesEl) notesEl.innerHTML = `<li class="text-sm text-gray-500">${message}</li>`;
+  renderAgentReasoning(null);
   const updated = document.getElementById("recommendation-updated");
   if (updated) updated.innerHTML = "";
 }
@@ -310,6 +328,32 @@ async function onGenerateRecommendation() {
     console.error("Failed to load recommendation:", err);
     renderRecommendationPlaceholder(
       "Failed to load recommendation. Check the backend on :8001."
+    );
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    refreshIcons();
+  }
+}
+
+async function onRunPricingAgent() {
+  const sel = document.getElementById("property-select");
+  const btn = document.getElementById("agent-recommendation-btn");
+  if (!sel || !btn || !sel.value) return;
+
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Running agent…`;
+  refreshIcons();
+  renderRecommendationPlaceholder("Pricing Agent is evaluating comparables…");
+
+  try {
+    const rec = await window.api.runPricingAgent(sel.value);
+    renderRecommendation(rec);
+  } catch (err) {
+    console.error("Pricing Agent failed:", err);
+    renderRecommendationPlaceholder(
+      "Pricing Agent failed. Check the backend on :8001."
     );
   } finally {
     btn.disabled = false;
@@ -573,6 +617,9 @@ async function init() {
 
     const genBtn = document.getElementById("generate-recommendation-btn");
     if (genBtn) genBtn.addEventListener("click", onGenerateRecommendation);
+
+    const agentBtn = document.getElementById("agent-recommendation-btn");
+    if (agentBtn) agentBtn.addEventListener("click", onRunPricingAgent);
 
     const recalcBtn = document.getElementById("recalculate-btn");
     if (recalcBtn) recalcBtn.addEventListener("click", onRecalculate);

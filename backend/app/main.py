@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import chat, feedback, pricing, properties
+from app.api import agent, chat, feedback, pricing, properties
 from app.services.data_loader import DataLoader
 
 
@@ -49,3 +49,4 @@ app.include_router(properties.router)
 app.include_router(pricing.router)
 app.include_router(chat.router)
 app.include_router(feedback.router)
+app.include_router(agent.router)
